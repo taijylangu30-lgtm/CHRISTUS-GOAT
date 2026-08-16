@@ -114,7 +114,7 @@ module.exports = {
 
       msg += `\n${fonts.bold("➜ Try to Explore more commands!")}\n`;
       msg += `${fonts.bold("➜ View all:")} ${prefix}help all\n`;
-      msg += `${fonts.bold("➜ Developed by @Christus")} 🎀`;
+      msg += `${fonts.bold("➜ Developed by @Shade")} 🎀`;
 
       return message.reply(msg);
     }
@@ -153,7 +153,7 @@ module.exports = {
         msg += `${fonts.bold("➜")} ${cfg.description?.fr || "No Description"}\n\n`;
       }
 
-      msg += `${fonts.bold("➜ Developed by @Christus")} 🎀`;
+      msg += `${fonts.bold("➜ Developed by @Shade")} 🎀`;
 
       return message.reply(msg);
     }
