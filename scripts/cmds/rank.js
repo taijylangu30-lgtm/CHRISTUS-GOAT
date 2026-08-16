@@ -406,7 +406,7 @@ async function buildCanvas(data, theme, avatarPath) {
   const FOOT_Y = CH - 36;
   GL(ctx, 60, FOOT_Y - 18, CW - 60, FOOT_Y - 18, theme.primary, 1);
   const now = moment().tz("Asia/Dhaka").format("DD/MM/YYYY  HH:mm");
-  T(ctx, `${theme.name}  ·  Christus  ·  ${now}`, CW / 2, FOOT_Y, 12.5, "#FFFFFF", { align: "center", alpha: 0.4, weight: "600" });
+  T(ctx, `${theme.name}  ·  Shade  ·  ${now}`, CW / 2, FOOT_Y, 12.5, "#FFFFFF", { align: "center", alpha: 0.4, weight: "600" });
 
   return canvas;
 }
