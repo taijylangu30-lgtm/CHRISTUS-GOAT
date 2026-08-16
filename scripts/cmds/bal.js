@@ -638,7 +638,7 @@ async function buildCanvas(data, theme, avatarPath) {
   const footY = gridY + tileH*2 + gGap + 40;
   GL(ctx, barX, footY-16, barX+barW, footY-16, theme.primary, 1);
   const now = moment().tz("Asia/Dhaka").format("DD/MM/YYYY  HH:mm");
-  T(ctx, `${theme.name}  ·  BALANCE ULTIMATE  ·  Christus  ·  ${now}`, cx, footY, 12.5, theme.text, { align:"center", alpha:0.42, weight:"600" });
+  T(ctx, `${theme.name}  ·  BALANCE ULTIMATE  ·  Shade  ·  ${now}`, cx, footY, 12.5, theme.text, { align:"center", alpha:0.42, weight:"600" });
 
   return canvas;
 }
