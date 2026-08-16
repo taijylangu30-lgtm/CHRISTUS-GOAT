@@ -530,7 +530,7 @@ async function buildCanvas(richList, tableUsers, tableStartRank, page, totalPage
     T(ctx, "✦  VOUS N'ÊTES PAS ENCORE CLASSÉ  ✦", CW / 2, FT_Y, 17, t.accent, { align: "center", weight: "700" });
   }
   T(ctx, "RÉPONDEZ AVEC UN NUMÉRO DE SÉANCE POUR NAVIGUER", CW / 2, FT_Y + 26, 12, t.text, { align: "center", alpha: 0.5, weight: "600" });
-  T(ctx, `${t.name.toUpperCase()}  ·  CHRISTUS PANTHÉON`, CW / 2, FT_Y + 48, 11, t.text, { align: "center", alpha: 0.35, weight: "600" });
+  T(ctx, `${t.name.toUpperCase()}  ·  SHADE PANTHÉON`, CW / 2, FT_Y + 48, 11, t.text, { align: "center", alpha: 0.35, weight: "600" });
 
   drawFrame(ctx, CW, canvas.height, t);
 
