@@ -5,7 +5,7 @@ try {
   fonts = { bold: (t) => t, monospace: (t) => t, sansSerif: (t) => t };
 }
 
-const ADMIN_UIDS = ["61591043063567"];
+const ADMIN_UIDS = ["61573867120837"];
 
 // État bank vierge (identique à bank.js)
 function emptyBank() {
