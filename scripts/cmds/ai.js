@@ -263,7 +263,7 @@ const handleAIRequest = async (api, event, userInput, message) => {
 module.exports = {
   config: {
     name: 'ai',
-    aliases: ['gpt', 'shade'],
+    aliases: ['shade'],
     version: '8.3',
     author: 'Shade',
     role: 0,
