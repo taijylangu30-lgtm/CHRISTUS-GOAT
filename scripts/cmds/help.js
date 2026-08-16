@@ -16,7 +16,7 @@ function toTitleCase(str) {
 module.exports = {
   config: {
     name: "help",
-    aliases: [],
+    aliases: ["aide"],
     version: "3.1.1",
     author: "Christus",
     countDown: 5,
@@ -79,7 +79,7 @@ module.exports = {
       msg += `\n${fonts.bold("➜ Command details:")} ${prefix}menu <commande>\n`;
       msg += `${fonts.bold("➜ Basics:")} ${prefix}help basics\n`;
       msg += `${fonts.bold("➜ Search:")} ${prefix}help search <mot>\n`;
-      msg += `${fonts.bold("➜ Developed by @Christus")} 🎀`;
+      msg += `${fonts.bold("➜ Developed by @Shade")} 🎀`;
 
       return message.reply(msg);
     }
