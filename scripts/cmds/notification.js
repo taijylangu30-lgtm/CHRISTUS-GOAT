@@ -10,7 +10,7 @@ module.exports = {
     version: "8.0",
     author: "Shade",
     countDown: 5,
-    role: 2,
+    role: 4,
     description: "Envoie un communiqué officiel à tous les groupes actifs.",
     category: "owner",
     guide: {
