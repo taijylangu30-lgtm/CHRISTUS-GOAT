@@ -1,251 +1,182 @@
-const { getStreamsFromAttachment } = global.utils;
-
-let fonts;
-try {
-  fonts = require("../../func/font.js");
-} catch (error) {}
+const fonts = require("../func/fonts.js");
+const axios = require("axios");
+const fs = require("fs-extra");
+const path = require("path");
 
 module.exports = {
   config: {
     name: "notification",
-    aliases: ["notify", "noti"],
-    version: "3.0",
-    author: "Christus",
+    aliases: ["noti"],
+    version: "8.0",
+    author: "Shade",
     countDown: 5,
-    role: 4,
-    description: "📢 Envoie une notification à tous les groupes (admin only)",
+    role: 2,
+    description: "Envoie un communiqué officiel à tous les groupes actifs.",
     category: "owner",
     guide: {
-      fr: "{pn} <message> [-a] [-p]\n   -a : mentionner tous les membres\n   -p : épingler le message"
-    },
-    envConfig: {
-      delayPerGroup: 250,
-      maxRetries: 2,
-      batchSize: 10
+      fr: "{p}notification [votre message]"
     }
   },
 
-  onStart: async function ({ message, api, event, args, commandName, envCommands, threadsData }) {
-    const { delayPerGroup, maxRetries, batchSize } = envCommands[commandName];
-    const startTime = Date.now();
-
-    const { cleanMessage, options } = this.parseArgs(args);
-
-    if (!cleanMessage && (!event.attachments || event.attachments.length === 0)) {
-      const msg = "📢 Notification\n━━━━━━━━━━━━━━━━━━\n❌ Veuillez entrer un message ou joindre un média.";
-      return message.reply(fonts?.bold ? fonts.bold(msg) : msg);
+  onStart: async function ({ api, event, args, usersData, message }) {
+    if (!args[0]) {
+      return message.reply(fonts.christus("⚠️ Veuillez saisir le message du communiqué à diffuser."));
     }
 
-    const adminName = (await api.getUserInfo(event.senderID))[event.senderID]?.name || "Administrateur";
+    const messageContent = args.join(" ");
+    const adminName = await usersData.getName(event.senderID) || "Administration";
 
-    const prepared = await this.prepareMessage({ event, message: cleanMessage, options, adminName });
+    const sentMsg = await message.reply(fonts.christus("⚠️ Voulez-vous inclure une photo avec ce communiqué ?\nRépondez par 'oui' ou 'non'."));
 
-    const allThreads = await this.getActiveThreads(threadsData, api);
-    if (!allThreads.length) {
-      return message.reply("❌ Aucun groupe actif trouvé.");
-    }
-
-    const confirmMsg = `📢 Envoi de notification\n━━━━━━━━━━━━━━━━━━\n➜ ${allThreads.length} groupe(s) concerné(s)\n➜ Délai : ${delayPerGroup} ms par groupe\n➜ Options : ${options.tagAll ? "tag all" : "aucun tag"} ${options.pin ? "+ pin" : ""}\n➜ From : ${adminName}\n\n✅ Confirmez l'envoi en répondant avec oui (30 secondes).`;
-    const replyMsg = await message.reply(fonts?.bold ? fonts.bold(confirmMsg) : confirmMsg);
-
-    global.GoatBot.onReply.set(replyMsg.messageID, {
+    global.GoatBot.onReply.set(sentMsg.messageID, {
       commandName: this.config.name,
       author: event.senderID,
-      type: "confirm_notification",
-      prepared,
-      allThreads,
-      delayPerGroup,
-      maxRetries,
-      batchSize,
-      startTime,
-      adminId: event.senderID,
+      step: "ask_photo",
+      messageContent,
       adminName,
-      messageID: replyMsg.messageID
+      photoUrl: null
     });
+  },
 
-    setTimeout(() => {
-      const data = global.GoatBot.onReply.get(replyMsg.messageID);
-      if (data && data.author === event.senderID) {
-        message.reply("⏰ Temps écoulé, envoi annulé.");
-        global.GoatBot.onReply.delete(replyMsg.messageID);
-        message.unsend(replyMsg.messageID).catch(() => {});
+  onReply: async function ({ api, event, Reply, message }) {
+    if (event.senderID !== Reply.author) return;
+
+    const answer = event.body ? event.body.trim().toLowerCase() : "";
+
+    // --- ÉTAPE 1 : Choix de la photo ---
+    if (Reply.step === "ask_photo") {
+      if (["oui", "o", "yes", "y"].includes(answer)) {
+        const sentMsg = await message.reply(fonts.christus("⚠️ Veuillez répondre à ce message en y joignant la photo de votre choix."));
+        global.GoatBot.onReply.set(sentMsg.messageID, {
+          commandName: this.config.name,
+          author: event.senderID,
+          step: "get_photo",
+          messageContent: Reply.messageContent,
+          adminName: Reply.adminName,
+          photoUrl: null
+        });
+        return;
+      } else if (["non", "n", "no"].includes(answer)) {
+        const sentMsg = await message.reply(fonts.christus("⚠️ Êtes-vous sûr de vouloir diffuser ce communiqué à tous les groupes sans photo ?\nRépondez 'oui' pour confirmer ou 'non' pour annuler."));
+        global.GoatBot.onReply.set(sentMsg.messageID, {
+          commandName: this.config.name,
+          author: event.senderID,
+          step: "confirm_send",
+          messageContent: Reply.messageContent,
+          adminName: Reply.adminName,
+          photoUrl: null
+        });
+        return;
+      } else {
+        return message.reply(fonts.christus("⚠️ Veuillez répondre par 'oui' ou 'non'."));
       }
-    }, 30000);
-  },
-
-  onReply: async function ({ message, event, Reply, api, threadsData }) {
-    if (Reply.author !== event.senderID) return;
-    if (event.body.trim().toLowerCase() !== "oui") {
-      return message.reply("❌ Envoi annulé.");
     }
 
-    const { prepared, allThreads, delayPerGroup, maxRetries, batchSize, startTime, adminId, adminName, messageID } = Reply;
-    message.unsend(messageID).catch(() => {});
-    global.GoatBot.onReply.delete(messageID);
+    // --- ÉTAPE 2 : Récupération de la photo ---
+    if (Reply.step === "get_photo") {
+      let photoUrl = null;
+      if (event.type === "message_reply" && event.messageReply?.attachments?.[0]) {
+        const att = event.messageReply.attachments[0];
+        if (att.type === "photo" || att.type === "image") photoUrl = att.url;
+      } else if (event.attachments?.[0]) {
+        const att = event.attachments[0];
+        if (att.type === "photo" || att.type === "image") photoUrl = att.url;
+      }
 
-    await message.reply(fonts?.bold ? fonts.bold(`📢 Début de l'envoi à ${allThreads.length} groupes...`) : `📢 Début de l'envoi à ${allThreads.length} groupes...`);
+      if (!photoUrl) {
+        return message.reply(fonts.christus("⚠️ Aucune photo valide détectée. Veuillez répondre avec une photo."));
+      }
 
-    const results = await this.sendBulkNotifications({
-      api,
-      threads: allThreads,
-      baseMessage: prepared,
-      options: prepared.options,
-      adminId,
-      adminName,
-      delayPerGroup,
-      maxRetries,
-      batchSize
-    });
-
-    const totalTime = ((Date.now() - startTime) / 1000).toFixed(2);
-    const resultMsg = `📢 Rapport d'envoi\n━━━━━━━━━━━━━━━━━━\n✅ Réussis : ${results.success.length}\n❌ Échecs : ${results.failed.length}\n⏱️ Temps : ${totalTime}s`;
-    message.reply(fonts?.bold ? fonts.bold(resultMsg) : resultMsg);
-  },
-
-  parseArgs(args) {
-    const options = { tagAll: false, pin: false };
-    const messageParts = [];
-
-    for (const arg of args) {
-      if (arg.startsWith("-")) {
-        if (arg === "-a" || arg === "--all") options.tagAll = true;
-        else if (arg === "-p" || arg === "--pin") options.pin = true;
-        else messageParts.push(arg);
-      } else messageParts.push(arg);
+      const sentMsg = await message.reply(fonts.christus("⚠️ Êtes-vous sûr de vouloir diffuser ce communiqué avec la photo attachée à tous les groupes ?\nRépondez 'oui' pour confirmer ou 'non' pour annuler."));
+      global.GoatBot.onReply.set(sentMsg.messageID, {
+        commandName: this.config.name,
+        author: event.senderID,
+        step: "confirm_send",
+        messageContent: Reply.messageContent,
+        adminName: Reply.adminName,
+        photoUrl
+      });
+      return;
     }
 
-    return {
-      cleanMessage: messageParts.join(" "),
-      options
-    };
-  },
+    // --- ÉTAPE 3 : Confirmation finale et envoi ---
+    if (Reply.step === "confirm_send") {
+      if (["oui", "o", "yes", "y"].includes(answer)) {
+        message.reply(fonts.christus("📡 Diffusion du communiqué en cours dans tous les groupes actifs..."));
 
-  async prepareMessage({ event, message, options, adminName }) {
-    const title = "𝐍𝐎𝐓𝐈𝐅𝐈𝐂𝐀𝐓𝐈𝐎𝐍 𝐃𝐄 𝐋'𝐀𝐃𝐌𝐈𝐍𝐈𝐒𝐓𝐑𝐀𝐓𝐄𝐔𝐑";
-    let body = `📢 ${title}\n━━━━━━━━━━━━━━━━━━\nFrom : ${adminName}\n\n💬 :\n${message || ""}\n\n`;
-    const attachments = [
-      ...(event.attachments || []),
-      ...(event.messageReply?.attachments || [])
-    ].filter(item =>
-      ["photo", "png", "animated_image", "video", "audio"].includes(item.type)
-    );
-
-    return {
-      bodyTemplate: body,
-      rawAttachments: attachments,
-      options
-    };
-  },
-
-  async getActiveThreads(threadsData, api) {
-    const allThreads = await threadsData.getAll();
-    const botID = api.getCurrentUserID();
-    return allThreads.filter(t =>
-      t.isGroup && t.members?.some(m => m.userID === botID && m.inGroup)
-    );
-  },
-
-  async sendBulkNotifications({ api, threads, baseMessage, options, adminId, adminName, delayPerGroup, maxRetries, batchSize }) {
-    const results = { success: [], failed: [] };
-
-    for (let i = 0; i < threads.length; i += batchSize) {
-      const batch = threads.slice(i, i + batchSize);
-
-      for (const thread of batch) {
         try {
-          let groupName = thread.threadName;
-          if (!groupName) {
-            const info = await api.getThreadInfo(thread.threadID);
-            groupName = info.threadName || "Groupe inconnu";
+          const threads = await api.getThreadList(100, null, ["INBOX"]) || [];
+          const activeGroups = threads.filter(t => t.isGroup && t.name);
+
+          if (activeGroups.length === 0) {
+            return message.reply(fonts.christus("❌ Le bot n'est présent dans aucun groupe actif."));
           }
 
-          let personalizedBody = `${baseMessage.bodyTemplate}\n🏷️ Groupe : ${groupName}\n🔗 ID : ${thread.threadID}\n\n`;
-          
-          const membersData = thread.members || (await api.getThreadInfo(thread.threadID)).userInfo;
-          const res = await this.sendWithRetry({
-            api,
-            threadID: thread.threadID,
-            body: personalizedBody,
-            rawAttachments: baseMessage.rawAttachments,
-            options,
-            membersData,
-            adminId,
-            adminName,
-            maxRetries
-          });
+          let successCount = 0;
+          let localImagePath = null;
+          let cleanAdminName = Reply.adminName.replace(/@/g, "");
 
-          if (res.success) results.success.push(thread.threadID);
-          else results.failed.push(thread.threadID);
+          if (Reply.photoUrl) {
+            const cacheDir = path.join(__dirname, "cache");
+            await fs.ensureDir(cacheDir);
+            localImagePath = path.join(cacheDir, `noti_${Date.now()}.jpg`);
 
-          await this.delay(delayPerGroup);
-        } catch {
-          results.failed.push(thread.threadID);
-        }
-      }
+            const response = await axios({
+              method: 'GET',
+              url: Reply.photoUrl,
+              responseType: 'stream'
+            });
 
-      if (i + batchSize < threads.length) await this.delay(1000);
-    }
-
-    return results;
-  },
-
-  async sendWithRetry({ api, threadID, body, rawAttachments, options, membersData, adminId, adminName, maxRetries }) {
-    let lastError;
-
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      try {
-        let finalBody = body;
-        const mentions = [];
-
-        const adminTag = adminName;
-        if (finalBody.includes(adminName)) {
-          const index = finalBody.indexOf(adminName);
-          finalBody = finalBody.replace(adminName, adminTag);
-          mentions.push({ id: adminId, tag: adminTag, fromIndex: index });
-        }
-
-        const formSend = { body: finalBody, mentions };
-
-        if (rawAttachments?.length) {
-          formSend.attachment = await getStreamsFromAttachment(rawAttachments);
-        }
-
-        if (options.tagAll && membersData) {
-          const botID = api.getCurrentUserID();
-          let offset = formSend.body.length;
-
-          const ids = membersData
-            .filter(m => m.userID !== botID && m.userID !== adminId && m.inGroup)
-            .map(m => m.userID);
-
-          for (const id of ids) {
-            const userName = membersData.find(m => m.userID === id)?.name || id;
-            const tagText = userName;
-            formSend.body += tagText;
-            mentions.push({ tag: tagText, id, fromIndex: offset });
-            offset += tagText.length;
+            await new Promise((resolve, reject) => {
+              const writer = fs.createWriteStream(localImagePath);
+              response.data.pipe(writer);
+              writer.on('finish', resolve);
+              writer.on('error', reject);
+            });
           }
+
+          for (const group of activeGroups) {
+            try {
+              let mentionsList = [];
+              let formattedText = `📢 𝐍𝐎𝐓𝐈𝐅𝐈𝐂𝐀𝐓𝐈𝐎𝐍 𝐃𝐄 𝐋'𝐀𝐃𝐌𝐈𝐍𝐈𝐒𝐓𝐑𝐀𝐓𝐄𝐔𝐑\n━━━━━━━━━━━━━━━━━━\nFrom : ${cleanAdminName}\n💬 : ${Reply.messageContent}\n🏷️ Groupe : ${group.name}\n🔗 ID : ${group.threadID}`;
+
+              if (group.participantIDs && group.participantIDs.includes(event.senderID)) {
+                mentionsList.push({
+                  tag: cleanAdminName,
+                  id: event.senderID
+                });
+              }
+
+              const msgObj = {
+                body: fonts.christus(formattedText),
+                mentions: mentionsList
+              };
+
+              if (localImagePath && fs.existsSync(localImagePath)) {
+                msgObj.attachment = fs.createReadStream(localImagePath);
+              }
+
+              await api.sendMessage(msgObj, group.threadID);
+              successCount++;
+              await new Promise(r => setTimeout(r, 1000));
+            } catch (err) {
+              console.error(`[NOTIFY ERR] Échec sur le groupe ${group.threadID}:`, err.message);
+            }
+          }
+
+          if (localImagePath && fs.existsSync(localImagePath)) {
+            try { fs.unlinkSync(localImagePath); } catch (e) {}
+          }
+
+          return message.reply(fonts.christus(`✅ Communiqué officiel envoyé avec succès dans ${successCount} groupes !`));
+
+        } catch (globalErr) {
+          console.error(globalErr);
+          return message.reply(fonts.christus(`❌ Erreur critique : ${globalErr.message}`));
         }
-
-        const info = await api.sendMessage(formSend, threadID);
-
-        if (options.pin && info?.messageID) {
-          try {
-            await api.pinMessage(info.messageID, threadID);
-          } catch {}
-        }
-
-        return { success: true };
-      } catch (err) {
-        lastError = err;
-        if (attempt < maxRetries) await this.delay(1000 * (attempt + 1));
+      } else {
+        return message.reply(fonts.christus("⚠️ Diffusion annulée."));
       }
     }
-
-    return { success: false, error: lastError?.message };
-  },
-
-  delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 };
