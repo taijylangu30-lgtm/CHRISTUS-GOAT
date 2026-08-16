@@ -567,7 +567,7 @@ async function buildCanvas(theme, botName, botVersion) {
   const footY = panelY + panelH + 34;
   GL(ctx, barX, footY-16, barX+barW, footY-16, theme.primary, 1);
   const now = new Date().toLocaleString("fr-FR", { timeZone: "Asia/Dhaka" });
-  T(ctx, `${theme.name}  ·  SYSTEM CORE  ·  Christus  ·  ${now}`, cx, footY, 12.5, theme.text, { align:"center", alpha:0.42, weight:"600" });
+  T(ctx, `${theme.name}  ·  SYSTEM CORE  ·  Shade  ·  ${now}`, cx, footY, 12.5, theme.text, { align:"center", alpha:0.42, weight:"600" });
 
   return canvas;
 }
