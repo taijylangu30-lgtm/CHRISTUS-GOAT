@@ -1,70 +1,77 @@
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
+const a = require("axios");
+const b = require("fs");
+const c = require("path");
+const d = require("yt-search");
+
+const nix = "https://raw.githubusercontent.com/aryannix/stuffs/master/raw/apis.json";
 
 module.exports = {
   config: {
     name: "sing",
-    aliases: ["song", "music"],
-    version: "0.0.7",
-    author: "Azadx69x",
+    aliases: ["music", "song"],
+    version: "0.0.1",
+    author: "Shade",
     countDown: 5,
     role: 0,
-    description: "sing from YouTube",
-    category: "social",
-    guide: "{pn} <song name>"
+    shortDescription: "Sing tomake chai",
+    longDescription: "Search and download music from YouTube",
+    category: "MUSIC",
+    guide: "/music <song name or YouTube URL>"
   },
 
-  onStart: async function ({ api, args, event }) {
-    const query = args.join(" ");
+  onStart: async function ({ api: e, event: f, args: g }) {
+    if (!g.length) return e.sendMessage("❌ Provide a song name or YouTube URL.", f.threadID, f.messageID);
+
+    let baseApi;
+    const i = await e.sendMessage("🎵 Please wait...", f.threadID, null, f.messageID);
     
-    if (!query) {
-      return api.sendMessage("Provide a song name", event.threadID, event.messageID);
+    try {
+      const configRes = await a.get(nix);
+      baseApi = configRes.data && configRes.data.api;
+      if (!baseApi) throw new Error("Configuration Error: Missing API in GitHub JSON.");
+    } catch (error) {
+      e.unsendMessage(i.messageID);
+      return e.sendMessage("❌ Failed to fetch API configuration from GitHub.", f.threadID, f.messageID);
     }
 
-    try {
-      api.setMessageReaction("🔍", event.messageID, event.threadID, () => {}, true);
-      
-      const apiUrl = `https://azadx69x-all-apis-top.vercel.app/api/sing?song=${encodeURIComponent(query)}`;
-      const res = await axios.get(apiUrl, { timeout: 30000 });
+    let h = g.join(" ");
 
-      if (!res.data?.success || !res.data?.audio?.url) {
-        api.setMessageReaction("❌", event.messageID, event.threadID, () => {}, true);
-        return api.sendMessage("Failed to get audio", event.threadID, event.messageID);
+    try {
+      let j;
+      if (h.startsWith("http")) {
+        j = h;
+      } else {
+        const k = await d(h);
+        if (!k || !k.videos.length) throw new Error("No results found.");
+        j = k.videos[0].url;
       }
 
-      const { info, audio } = res.data;
-      const fileName = `sing_${Date.now()}.m4a`;
-      const filePath = path.join(__dirname, fileName);
+      const l = `${baseApi}/play?url=${encodeURIComponent(j)}`;
+      const m = await a.get(l);
+      const n = m.data;
 
-      api.setMessageReaction("⬇️", event.messageID, event.threadID, () => {}, true);
+      if (!n.status || !n.downloadUrl) throw new Error("API failed to return download URL.");
 
-      const downloadRes = await axios({
-        url: audio.url,
-        method: "GET",
-        responseType: "arraybuffer",
-        timeout: 60000,
-        headers: { "User-Agent": "Mozilla/5.0" }
-      });
+      const o = `${n.title}.mp3`.replace(/[\\/:"*?<>|]/g, "");
+      const p = c.join(__dirname, o);
 
-      fs.writeFileSync(filePath, Buffer.from(downloadRes.data));
+      const q = await a.get(n.downloadUrl, { responseType: "arraybuffer" });
+      b.writeFileSync(p, q.data);
 
-      await api.sendMessage(
-        {
-          body: `${info.title}\n${info.artist}`,
-          attachment: fs.createReadStream(filePath)
+      await e.sendMessage(
+        { attachment: b.createReadStream(p), body: `🎵 𝗠𝗨𝗦𝗜𝗖\n━━━━━━━━━━━━━━━\n\n${n.title}` },
+        f.threadID,
+        () => {
+          b.unlinkSync(p);
+          e.unsendMessage(i.messageID);
         },
-        event.threadID,
-        () => { 
-          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-          api.setMessageReaction("✅", event.messageID, event.threadID, () => {}, true);
-        },
-        event.messageID
+        f.messageID
       );
 
-    } catch (error) {
-      api.setMessageReaction("❌", event.messageID, event.threadID, () => {}, true);
-      return api.sendMessage(`Error: ${error.message}`, event.threadID, event.messageID);
+    } catch (r) {
+      console.error(r);
+      e.sendMessage(`❌ Failed to download song: ${r.message}`, f.threadID, f.messageID);
+      e.unsendMessage(i.messageID);
     }
   }
 };
