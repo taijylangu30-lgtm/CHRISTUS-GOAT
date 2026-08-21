@@ -7,7 +7,7 @@ module.exports = {
   config: {
     name: "lyrics",
     version: "3.5",
-    author: "Shade",
+    author: "Shade x Christus",
     countDown: 5,
     role: 0,
     shortDescription: "Récupère les paroles d'une chanson via Shade Lyrics",
