@@ -26,7 +26,7 @@ async function urlToBase64(url) {
 module.exports = {
   config: {
     name: "gem",
-    author: "Shade",
+    author: "Shade x Christus",
     version: "3.0",
     cooldowns: 5,
     role: 3,
